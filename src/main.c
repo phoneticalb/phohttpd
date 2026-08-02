@@ -1,32 +1,42 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include "server.h"
 #include <netinet/in.h>
+#include "macros.h"
+#include "http.h"
 
 int main(int argc, char* argv[]) {
-    struct sockaddr_in client_sockaddr_in;
+    struct sockaddr_in client_addr;
     const int port = 8080;
     const char* bind_addr = "0.0.0.0";
-    socklen_t len = sizeof(client_sockaddr_in);
+    socklen_t client_addr_len = sizeof(client_addr);
 
     int tcp_fd = create_tcp_socket(port, bind_addr);
 
     listen(tcp_fd, 5);
 
-    fprintf(stderr, "Listening on %s:%d\n", bind_addr, port);
+    INFO("listening on %s:%d\n", bind_addr, port);
 
     while (1) {
-        printf("new\n");
-        int conn_fd = accept(tcp_fd, (struct sockaddr*)&client_sockaddr_in, &len);
+        int conn_fd = accept(tcp_fd, (struct sockaddr*)&client_addr, &client_addr_len);
 
-        char buffer[256] = {};
-        read(conn_fd, buffer, sizeof(buffer));
+        if (!fork()) {
+            close(tcp_fd);
 
-        printf("%s", buffer);
+            char buffer[1024] = {};
+            read(conn_fd, buffer, sizeof(buffer));
 
-        char status = 0;
-        write(conn_fd, &status, 1);
+            char* response = http_req(buffer);
+
+            write(conn_fd, response, strlen(response));
+            close(conn_fd);
+            exit(0);
+        }
+
+        close(conn_fd);
     }
 
     close(tcp_fd);

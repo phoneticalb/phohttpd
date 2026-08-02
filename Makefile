@@ -3,7 +3,7 @@ CC = gcc
 CFLAGS = -D_POSIX_C_SOURCE=200809L -DVERSION=\"$(GIT_VERSION)\"
 LDFLAGS =
 BINARY = ./build/phohttpd
-SOURCES = ./src/server.c ./src/main.c
+SOURCES = ./src/http.c ./src/server.c ./src/main.c
 INCLUDES = ./build
 
 all: $(BINARY)
