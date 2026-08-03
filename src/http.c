@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 #include "macros.h"
 #include <fcntl.h>
@@ -17,10 +18,12 @@ static char* normalize_path(char* path) {
 
 char* http_req(char* data) {
     static char response[4096];
+    char* file_buf = NULL;
+    int file_buf_size = 0;
     char** headers;
     char* token;
+
     char* buf = strdup(data);
-    char file_buf[4096] = { 0 };
 
     token = strtok(buf, " ");
     char* method = strdup(token);
@@ -48,11 +51,9 @@ char* http_req(char* data) {
 
     INFO("path: %s\n", normalize_path(path));
 
-    // FILE* file = fopen(normalize_path(path), "r");
-
-    int file = open(normalize_path(path), O_RDONLY);
-    if (file == -1) {
-        ERR("error in open: %s\n", strerror(errno));
+    FILE* file = fopen(normalize_path(path), "r");
+    if (file == NULL) {
+        ERR("error in fopen: %s\n", strerror(errno));
         switch (errno) {
             case ENOENT:
                 snprintf(response, sizeof(response), "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
@@ -68,14 +69,24 @@ char* http_req(char* data) {
         return response;
     }
 
-    if (read(file, &file_buf, sizeof(file_buf)) == -1) {
-        ERR("error in read: %s\n", strerror(errno));
-        snprintf(response, sizeof(response), "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
-        return response;
+    int i = 0, c;
+    while ((c = fgetc(file)) != EOF) {
+        if (i >= file_buf_size) {
+            file_buf_size += 100;
+            file_buf = realloc(file_buf, file_buf_size);
+            if (file_buf == NULL) {
+                ERR("error in realloc: %s\n", strerror(errno));
+                return NULL;
+            }
+        }
+        file_buf[i] = c;
+        i++;
     }
 
     snprintf(response, sizeof(response), "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n%s", file_buf);
 
-    close(file);
+    fclose(file);
+    free(file_buf);
+
     return response;
 }
