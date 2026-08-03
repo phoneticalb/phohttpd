@@ -48,18 +48,20 @@ char* http_req(char* data) {
 
     INFO("path: %s\n", normalize_path(path));
 
+    // FILE* file = fopen(normalize_path(path), "r");
+
     int file = open(normalize_path(path), O_RDONLY);
     if (file == -1) {
         ERR("error in open: %s\n", strerror(errno));
         switch (errno) {
             case ENOENT:
-                snprintf(response, sizeof(response), "HTTP/1.1 404 Not Found\r\n\r\n");
+                snprintf(response, sizeof(response), "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
                 break;
             case EACCES:
-                snprintf(response, sizeof(response), "HTTP/1.1 403 Forbidden\r\n\r\n");
+                snprintf(response, sizeof(response), "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
                 break;
             default:
-                snprintf(response, sizeof(response), "HTTP/1.1 400 Bad Request\r\n\r\n");
+                snprintf(response, sizeof(response), "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
                 break;
             }
 
@@ -68,12 +70,12 @@ char* http_req(char* data) {
 
     if (read(file, &file_buf, sizeof(file_buf)) == -1) {
         ERR("error in read: %s\n", strerror(errno));
-        snprintf(response, sizeof(response), "HTTP/1.1 400 Bad Request\r\n\r\n");
+        snprintf(response, sizeof(response), "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
         return response;
     }
 
-    snprintf(response, sizeof(response), "HTTP/1.1 200 OK\r\n\r\n%s", file_buf);
+    snprintf(response, sizeof(response), "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n%s", file_buf);
 
-    // close(file);
+    close(file);
     return response;
 }
