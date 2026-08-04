@@ -37,27 +37,26 @@ static void http_resp(int status, int sockfd, FILE* file) {
     switch (status) {
         case 200:
             response_str = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n";
-            len = strlen(response_str);
-            write(sockfd, response_str, len);
+            break;
+        case 400:
+            response_str = "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n";
             break;
         case 403:
             response_str = "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n";
-            len = strlen(response_str);
-            write(sockfd, response_str, len);
             break;
         case 404:
             response_str = "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n";
-            len = strlen(response_str);
-            write(sockfd, response_str, len);
             break;
         case 500:
             response_str = "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n";
-            len = strlen(response_str);
-            write(sockfd, response_str, len);
             break;
         default:
             WARN("unimplemented status code: %d\n", status);
             break;
+    }
+    if (response_str != NULL) {
+        len = strlen(response_str);
+        write(sockfd, response_str, len);
     }
     if (file != NULL)
         sock_write(sockfd, file);
