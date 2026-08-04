@@ -1,22 +1,23 @@
-#include <bits/posix1_lim.h>
+#include "http.h"
+#include "macros.h"
+#include "server.h"
+#include <netinet/in.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include "server.h"
-#include <netinet/in.h>
-#include "macros.h"
-#include "http.h"
 
 int main(int argc, char* argv[]) {
     INFO(ANSI_BOLD "phohttpd " ANSI_RESET "%s\n", VERSION);
     struct sockaddr_in client_addr;
-    const int port = 8080;
-    const char* bind_addr = "127.0.0.1";
-    socklen_t client_addr_len = sizeof(client_addr);
+    const int          port = 8080;
+    const char*        bind_addr = "127.0.0.1";
+    socklen_t          client_addr_len = sizeof(client_addr);
 
     int tcp_fd = create_tcp_socket(port, bind_addr);
+    if (tcp_fd == -1)
+        return 1;
 
     listen(tcp_fd, 5);
 
