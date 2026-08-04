@@ -1,6 +1,6 @@
 GIT_VERSION := "$(shell git describe --abbrev=0 --tags)"
 CC = gcc
-CFLAGS = -D_POSIX_C_SOURCE=200809L -DVERSION=\"$(GIT_VERSION)\"
+CFLAGS = -Wall -DVERSION=\"$(GIT_VERSION)\"
 LDFLAGS =
 BINARY = ./build/phohttpd
 SOURCES = ./src/http.c ./src/server.c ./src/main.c

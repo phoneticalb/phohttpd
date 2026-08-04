@@ -16,7 +16,7 @@ static char* normalize_path(char* path) {
     return new_path;
 }
 
-ssize_t http_req(char* data, char* response) {
+ssize_t http_req(char* data, char** response) {
     unsigned char* file_buf = NULL;
     ssize_t file_buf_size = 0;
     char** headers;
@@ -53,19 +53,17 @@ ssize_t http_req(char* data, char* response) {
     FILE* file = fopen(normalize_path(path), "r");
     if (file == NULL) {
         ERR("error in fopen: %s\n", strerror(errno));
-        switch (errno) {
-            case ENOENT:
-                snprintf(response, 256, "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
-                break;
-            case EACCES:
-                snprintf(response, 256, "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
-                break;
-            default:
-                snprintf(response, 256, "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
-                break;
-            }
-
-        return -1;
+        // switch (errno) {
+        //     case ENOENT:
+        //         snprintf(response, 256, "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+        //         break;
+        //     case EACCES:
+        //         snprintf(response, 256, "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+        //         break;
+        //     default:
+        //         snprintf(response, 256, "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+        //         break;
+        //     }
     }
 
     if (file) {
@@ -88,14 +86,17 @@ ssize_t http_req(char* data, char* response) {
     ssize_t http_ok_len = strlen(http_ok);
     ssize_t response_len = http_ok_len + file_buf_size;
 
-    if (realloc(response, response_len) == NULL) {
+    char* temp = realloc(*response, response_len);
+    if (temp == NULL) {
         ERR("error in realloc: %s\n", strerror(errno));
         free(file_buf);
         return -1;
+    } else {
+        *response = temp;
     }
 
-    memcpy(response, http_ok, http_ok_len);
-    memcpy(response + http_ok_len, file_buf, file_buf_size);
+    memcpy(*response, http_ok, http_ok_len);
+    memcpy(*response + http_ok_len, file_buf, file_buf_size);
 
     free(file_buf);
 

@@ -1,3 +1,5 @@
+#include <bits/posix1_lim.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -32,7 +34,7 @@ int main(int argc, char* argv[]) {
 
             read(conn_fd, buffer, sizeof(buffer));
 
-            ssize_t response_len = http_req(buffer, response);
+            ssize_t response_len = http_req(buffer, &response);
             if (response_len == -1) {
                 ERR("error processing HTTP req\n");
                 exit(1);
