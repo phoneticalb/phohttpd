@@ -5,6 +5,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#define CHUNK_SIZE 512
+
 static char* normalize_path(char* path) {
     static char new_path[256];
     char cwd[256] = { 0 };
@@ -16,9 +18,7 @@ static char* normalize_path(char* path) {
     return new_path;
 }
 
-ssize_t http_req(char* data, char** response) {
-    unsigned char* file_buf = NULL;
-    ssize_t file_buf_size = 0;
+int http_req(char* data, int fd) {
     char** headers;
     char* token;
 
@@ -48,7 +48,7 @@ ssize_t http_req(char* data, char** response) {
     //     INFO("%s\n", headers[i]);
     // }
 
-    INFO("path: %s\n", normalize_path(path));
+    DEBUG("requested path: %s\n", normalize_path(path));
 
     FILE* file = fopen(normalize_path(path), "r");
     if (file == NULL) {
@@ -66,39 +66,19 @@ ssize_t http_req(char* data, char** response) {
         //     }
     }
 
-    if (file) {
-        fseek(file, 0, SEEK_END);
-        file_buf_size = ftell(file);
-        rewind(file);
-
-        file_buf = malloc(file_buf_size);
-        if (file_buf == NULL) {
-            ERR("error when malloc'ing file: %s\n", strerror(errno));
-            return -1;
-        }
-
-        fread(file_buf, 1, file_buf_size, file);
-
-        fclose(file);
-    }
-
     char* http_ok = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n";
     ssize_t http_ok_len = strlen(http_ok);
-    ssize_t response_len = http_ok_len + file_buf_size;
 
-    char* temp = realloc(*response, response_len);
-    if (temp == NULL) {
-        ERR("error in realloc: %s\n", strerror(errno));
-        free(file_buf);
-        return -1;
-    } else {
-        *response = temp;
+    write(fd, http_ok, http_ok_len);
+
+    char chunk[CHUNK_SIZE];
+    ssize_t nbytes = 0;
+    while ((nbytes = fread(chunk, sizeof(char), CHUNK_SIZE, file))) {
+        if (write(fd, chunk, nbytes) == -1) {
+            ERR("didn't write to socket: %s\n", strerror(errno));
+            return -1;
+        }
     }
 
-    memcpy(*response, http_ok, http_ok_len);
-    memcpy(*response + http_ok_len, file_buf, file_buf_size);
-
-    free(file_buf);
-
-    return response_len;
+    return 0;
 }
