@@ -1,7 +1,6 @@
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include "server.h"
 #include <netinet/in.h>
@@ -26,13 +25,22 @@ int main(int argc, char* argv[]) {
         if (!fork()) {
             close(tcp_fd);
 
+            // for now
             char buffer[1024] = {};
+
+            char* response = malloc(sizeof(char));
+
             read(conn_fd, buffer, sizeof(buffer));
 
-            char* response = http_req(buffer);
+            ssize_t response_len = http_req(buffer, response);
+            if (response_len == -1) {
+                ERR("error processing HTTP req\n");
+                exit(1);
+            }
 
-            write(conn_fd, response, strlen(response));
+            write(conn_fd, response, response_len);
             close(conn_fd);
+            free(response);
             exit(0);
         }
 

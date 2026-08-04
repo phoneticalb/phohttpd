@@ -16,10 +16,9 @@ static char* normalize_path(char* path) {
     return new_path;
 }
 
-char* http_req(char* data) {
-    static char response[4096];
-    char* file_buf = NULL;
-    int file_buf_size = 0;
+ssize_t http_req(char* data, char* response) {
+    unsigned char* file_buf = NULL;
+    ssize_t file_buf_size = 0;
     char** headers;
     char* token;
 
@@ -56,37 +55,49 @@ char* http_req(char* data) {
         ERR("error in fopen: %s\n", strerror(errno));
         switch (errno) {
             case ENOENT:
-                snprintf(response, sizeof(response), "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+                snprintf(response, 256, "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
                 break;
             case EACCES:
-                snprintf(response, sizeof(response), "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+                snprintf(response, 256, "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
                 break;
             default:
-                snprintf(response, sizeof(response), "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+                snprintf(response, 256, "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
                 break;
             }
 
-        return response;
+        return -1;
     }
 
-    int i = 0, c;
-    while ((c = fgetc(file)) != EOF) {
-        if (i >= file_buf_size) {
-            file_buf_size += 100;
-            file_buf = realloc(file_buf, file_buf_size);
-            if (file_buf == NULL) {
-                ERR("error in realloc: %s\n", strerror(errno));
-                return NULL;
-            }
+    if (file) {
+        fseek(file, 0, SEEK_END);
+        file_buf_size = ftell(file);
+        rewind(file);
+
+        file_buf = malloc(file_buf_size);
+        if (file_buf == NULL) {
+            ERR("error when malloc'ing file: %s\n", strerror(errno));
+            return -1;
         }
-        file_buf[i] = c;
-        i++;
+
+        fread(file_buf, 1, file_buf_size, file);
+
+        fclose(file);
     }
 
-    snprintf(response, sizeof(response), "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n%s", file_buf);
+    char* http_ok = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n";
+    ssize_t http_ok_len = strlen(http_ok);
+    ssize_t response_len = http_ok_len + file_buf_size;
 
-    fclose(file);
+    if (realloc(response, response_len) == NULL) {
+        ERR("error in realloc: %s\n", strerror(errno));
+        free(file_buf);
+        return -1;
+    }
+
+    memcpy(response, http_ok, http_ok_len);
+    memcpy(response + http_ok_len, file_buf, file_buf_size);
+
     free(file_buf);
 
-    return response;
+    return response_len;
 }
