@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "err_pages.h"
 
 #define CHUNK_SIZE 512
 
@@ -83,12 +84,15 @@ int http_req(char* data, int sockfd) {
         switch (errno) {
             case ENOENT:
                 http_resp(404, sockfd, NULL);
+                write(sockfd, error_404_page, strlen(error_404_page));
                 return 1;
             case EACCES:
                 http_resp(403, sockfd, NULL);
+                write(sockfd, error_403_page, strlen(error_403_page));
                 return 1;
             default:
                 http_resp(500, sockfd, NULL);
+                write(sockfd, error_500_page, strlen(error_500_page));
                 return 1;
             }
     }
