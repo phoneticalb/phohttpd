@@ -12,4 +12,4 @@ And run with `./build/phohttpd`.
 
 ## Disclosure
 
-This project did not use AI/LLMs to write or assist with writing code.
+This project does not use AI/LLMs to write or assist with writing code.
