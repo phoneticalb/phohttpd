@@ -1,12 +1,19 @@
 #include "macros.h"
 #include <errno.h>
 #include <fcntl.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include "err_pages.h"
+#include <sys/stat.h>
 
 #define CHUNK_SIZE 512
+
+static int is_dir(const char *path) {
+   struct stat statbuf;
+   if (stat(path, &statbuf) != 0)
+       return 0;
+   return S_ISDIR(statbuf.st_mode);
+}
 
 static char* normalize_path(char* path) {
     static char new_path[256];
@@ -76,9 +83,16 @@ int http_req(char* data, int sockfd) {
     token = strtok(NULL, " \r\n");
     char* version = strdup(token);
 
-    DEBUG("requested path: %s\n", normalize_path(path));
+    char req_path[256];
+    char* tmp_path = normalize_path(path);
+    if (is_dir(tmp_path))
+        snprintf(req_path, strlen(tmp_path) + 12, "%s/index.html", tmp_path);
+    else
+        snprintf(req_path, strlen(tmp_path) + 1, "%s", tmp_path);
 
-    FILE* req_file = fopen(normalize_path(path), "r");
+    DEBUG("requested path: %s\n", req_path);
+
+    FILE* req_file = fopen(req_path, "r");
     if (req_file == NULL) {
         ERR("error in fopen: %s\n", strerror(errno));
         switch (errno) {
