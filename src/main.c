@@ -1,6 +1,7 @@
 #include "http.h"
 #include "macros.h"
 #include "server.h"
+#include <signal.h>
 #include <netinet/in.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -19,7 +20,9 @@ int main(int argc, char* argv[]) {
     if (tcp_fd == -1)
         return 1;
 
-    listen(tcp_fd, 5);
+    listen(tcp_fd, 8);
+
+    signal(SIGCHLD, SIG_IGN);
 
     INFO("listening on %s:%d\n", bind_addr, port);
 
