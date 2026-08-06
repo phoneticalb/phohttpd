@@ -1,14 +1,17 @@
 #include "http.h"
 #include "macros.h"
 #include "server.h"
+#include <errno.h>
 #include <getopt.h>
 #include <netinet/in.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 static const struct option long_options[] = {{"dir", required_argument, NULL, 'd'},
                                              {"help", no_argument, NULL, 'h'},
@@ -71,14 +74,17 @@ int main(int argc, char* argv[]) {
 
     listen(tcp_fd, 8);
 
-    signal(SIGCHLD, SIG_IGN);
+    // signal(SIGCHLD, SIG_IGN);
 
     INFO("listening on %s:%d\n", bind_addr, port);
 
     while (1) {
         int conn_fd = accept(tcp_fd, (struct sockaddr*)&client_addr, &client_addr_len);
+        int wstatus;
+        pid_t cpid, w;
 
-        if (!fork()) {
+        cpid = fork();
+        if (cpid == 0) { // child runs this block
             close(tcp_fd);
 
             // for now
@@ -87,12 +93,25 @@ int main(int argc, char* argv[]) {
             read(conn_fd, buffer, sizeof(buffer));
 
             if (http_req(buffer, conn_fd, directory) == -1) {
-                ERR("error processing HTTP req\n");
+                WARN("invalid http request\n");
+                close(conn_fd);
                 exit(EXIT_FAILURE);
             }
 
             close(conn_fd);
             exit(EXIT_SUCCESS);
+        } else { // parent runs this block
+            do {
+                w = waitpid(cpid, &wstatus, WUNTRACED | WCONTINUED);
+                if (w == -1) {
+                    ERR("error in waitpid: %s\n", strerror(errno));
+                    exit(EXIT_FAILURE);
+                }
+                if (WIFSIGNALED(wstatus)) {
+                    ERR("child was killed: %s\n", strsignal(WTERMSIG(wstatus)));
+                    exit(EXIT_FAILURE);
+                }
+            } while (!WIFEXITED(wstatus) && !WIFSIGNALED(wstatus));
         }
 
         close(conn_fd);

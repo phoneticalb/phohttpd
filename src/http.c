@@ -47,7 +47,7 @@ static char* fix_path(char* path, char* dir) {
 }
 
 // write file to socket for http response
-static void sock_write(int fd, FILE* file) {
+static void write_file(int fd, FILE* file) {
     char    chunk[CHUNK_SIZE];
     ssize_t nbytes = 0;
     while ((nbytes = fread(chunk, sizeof(char), CHUNK_SIZE, file))) {
@@ -78,6 +78,9 @@ static void http_resp(int status, int sockfd, FILE* file) {
     case 500:
         response_str = "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n";
         break;
+    case 505:
+        response_str = "HTTP/1.1 505 HTTP Version Not Supported\r\nConnection: close\r\n\r\n";
+        break;
     default:
         WARN("unimplemented status code: %d\n", status);
         break;
@@ -87,7 +90,7 @@ static void http_resp(int status, int sockfd, FILE* file) {
         write(sockfd, response_str, len);
     }
     if (file != NULL)
-        sock_write(sockfd, file);
+        write_file(sockfd, file);
 }
 
 int is_dir(const char* path) {
@@ -97,27 +100,69 @@ int is_dir(const char* path) {
     return S_ISDIR(statbuf.st_mode);
 }
 
+enum HttpMethod {
+    GET = 0,
+    HEAD = 1,
+};
+
+enum HttpVersion {
+    HTTP_INVALID = -1,
+    HTTP_10 = 0,
+    HTTP_11 = 1,
+};
+
 int http_req(char* data, int sockfd, char* dir) {
+    enum HttpMethod  method;
+    enum HttpVersion version;
+
+    char method_str[8];
+    char path[256];
+    char version_str[16];
+
     char* token;
     char* save;
 
-    char method[8];
-    char path[256];
-    char version[16];
-
     token = strtok_r(data, " ", &save);
-    strncpy(method, token, sizeof(method));
+    strncpy(method_str, token, sizeof(method_str));
 
     token = strtok_r(NULL, " ", &save);
     strncpy(path, token, sizeof(path));
 
     token = strtok_r(NULL, " \r\n", &save);
-    strncpy(version, token, sizeof(version));
+    strncpy(version_str, token, sizeof(version_str));
 
-    if (strncmp(method, "GET", 4)) {
+    if (method_str[0] == '\0' || path[0] == '\0' || version_str[0] == '\0') {
         http_resp(400, sockfd, NULL);
         write(sockfd, error_400_page, strlen(error_400_page));
-        return 1;
+        return -1;
+    }
+
+    if (!strncmp(version_str, "HTTP/1.0", 9))
+        version = HTTP_10;
+    else if (!strncmp(version_str, "HTTP/1.1", 9))
+        version = HTTP_11;
+    else
+        version = HTTP_INVALID;
+
+    if (version == HTTP_INVALID) {
+        http_resp(505, sockfd, NULL);
+        write(sockfd, error_505_page, strlen(error_505_page));
+        return -1;
+    }
+
+    if (!strncmp(method_str, "GET", 4))
+        method = GET;
+    else if (!strncmp(method_str, "HEAD", 5))
+        method = HEAD;
+    else {
+        http_resp(400, sockfd, NULL);
+        write(sockfd, error_400_page, strlen(error_400_page));
+        return -1;
+    }
+
+    if (method == HEAD) {
+        http_resp(200, sockfd, NULL);
+        return 0;
     }
 
     char  req_path[256];
@@ -132,24 +177,24 @@ int http_req(char* data, int sockfd, char* dir) {
 
     FILE* req_file = fopen(req_path, "r");
     if (req_file == NULL) {
-        ERR("error in fopen: %s\n", strerror(errno));
         switch (errno) {
         case ENOENT:
             http_resp(404, sockfd, NULL);
             write(sockfd, error_404_page, strlen(error_404_page));
-            return 1;
+            return -1;
         case EACCES:
             http_resp(403, sockfd, NULL);
             write(sockfd, error_403_page, strlen(error_403_page));
-            return 1;
+            return -1;
         default:
             http_resp(500, sockfd, NULL);
             write(sockfd, error_500_page, strlen(error_500_page));
-            return 1;
+            return -1;
         }
     }
 
-    http_resp(200, sockfd, req_file);
+    if (method == GET)
+        http_resp(200, sockfd, req_file);
 
     fclose(req_file);
 

@@ -95,3 +95,27 @@ static char error_500_page[] =
         </body> \
     </html> \
     ";
+
+static char error_505_page[] =
+    "<!DOCTYPE html> \
+    <html> \
+        <head> \
+            <style> \
+                body { \
+                    padding-left: 15px; \
+                    background-color: #111111; \
+                    color: white; \
+                } \
+                footer { \
+                    font-style: italic; \
+                    font-size: 14px; \
+                } \
+            </style> \
+        </head> \
+        <body> \
+            <h1>505 HTTP Version Not Supported</h1> \
+            <p>The requested HTTP version is not supported. This server only supports HTTP 1.0 or 1.1.</p> \
+            <footer>phohttpd</footer> \
+        </body> \
+    </html> \
+    ";
