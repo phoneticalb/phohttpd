@@ -114,7 +114,7 @@ static char error_505_page[] =
         </head> \
         <body> \
             <h1>505 HTTP Version Not Supported</h1> \
-            <p>The requested HTTP version is not supported. This server only supports HTTP 1.0 or 1.1.</p> \
+            <p>The requested HTTP version is not supported. This server only implements HTTP/1.0 or 1.1.</p> \
             <footer>phohttpd</footer> \
         </body> \
     </html> \

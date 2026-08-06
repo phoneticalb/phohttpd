@@ -72,9 +72,9 @@ int main(int argc, char* argv[]) {
     if (tcp_fd == -1)
         return 1;
 
-    listen(tcp_fd, 8);
+    listen(tcp_fd, 64);
 
-    // signal(SIGCHLD, SIG_IGN);
+    signal(SIGPIPE, SIG_IGN);
 
     INFO("listening on %s:%d\n", bind_addr, port);
 
@@ -90,7 +90,11 @@ int main(int argc, char* argv[]) {
             // for now
             char buffer[1024] = {};
 
-            read(conn_fd, buffer, sizeof(buffer));
+            if (read(conn_fd, buffer, sizeof(buffer)) == -1) {
+                WARN("error reading from socket: %s\n", strerror(errno));
+                close(conn_fd);
+                exit(EXIT_FAILURE);
+            };
 
             if (http_req(buffer, conn_fd, directory) == -1) {
                 WARN("invalid http request\n");
@@ -108,7 +112,8 @@ int main(int argc, char* argv[]) {
                     exit(EXIT_FAILURE);
                 }
                 if (WIFSIGNALED(wstatus)) {
-                    ERR("child was killed: %s\n", strsignal(WTERMSIG(wstatus)));
+                    int signal = WTERMSIG(wstatus);
+                    ERR("child was killed: %s\n", strsignal(signal));
                     exit(EXIT_FAILURE);
                 }
             } while (!WIFEXITED(wstatus) && !WIFSIGNALED(wstatus));

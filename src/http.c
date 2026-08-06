@@ -52,7 +52,7 @@ static void write_file(int fd, FILE* file) {
     ssize_t nbytes = 0;
     while ((nbytes = fread(chunk, sizeof(char), CHUNK_SIZE, file))) {
         if (write(fd, chunk, nbytes) == -1) {
-            ERR("couldn't write to socket: %s\n", strerror(errno));
+            WARN("error writing to socket: %s\n", strerror(errno));
             return;
         }
     }
