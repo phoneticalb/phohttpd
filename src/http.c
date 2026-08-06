@@ -114,6 +114,12 @@ int http_req(char* data, int sockfd, char* dir) {
     token = strtok_r(NULL, " \r\n", &save);
     strncpy(version, token, sizeof(version));
 
+    if (strncmp(method, "GET", 4)) {
+        http_resp(400, sockfd, NULL);
+        write(sockfd, error_400_page, strlen(error_400_page));
+        return 1;
+    }
+
     char  req_path[256];
     char* tmp_path = fix_path(path, dir);
 
