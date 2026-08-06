@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
     if (tcp_fd == -1)
         return 1;
 
-    listen(tcp_fd, 64);
+    listen(tcp_fd, 128);
 
     signal(SIGPIPE, SIG_IGN);
 

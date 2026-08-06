@@ -122,14 +122,14 @@ int http_req(char* data, int sockfd, char* dir) {
     char* token;
     char* save;
 
-    token = strtok_r(data, " ", &save);
-    strncpy(method_str, token, sizeof(method_str));
+    if ((token = strtok_r(data, " ", &save)) != NULL)
+        strncpy(method_str, token, sizeof(method_str));
 
-    token = strtok_r(NULL, " ", &save);
-    strncpy(path, token, sizeof(path));
+    if ((token = strtok_r(NULL, " ", &save)) != NULL)
+        strncpy(path, token, sizeof(path));
 
-    token = strtok_r(NULL, " \r\n", &save);
-    strncpy(version_str, token, sizeof(version_str));
+    if ((token = strtok_r(NULL, " \r\n", &save)) != NULL)
+        strncpy(version_str, token, sizeof(version_str));
 
     if (method_str[0] == '\0' || path[0] == '\0' || version_str[0] == '\0') {
         http_resp(400, sockfd, NULL);
