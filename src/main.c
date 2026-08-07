@@ -88,17 +88,16 @@ int main(int argc, char* argv[]) {
         if (cpid == 0) { // child runs this block
             close(tcp_fd);
 
-            int len = 0;
-            ioctl(conn_fd, FIONREAD, &len);
-            char buffer[len];
+            const int req_limit = 4096;
+            char buffer[req_limit];
 
-            if (len > 0 && read(conn_fd, buffer, len) == -1) {
+            if (read(conn_fd, buffer, req_limit) == -1) {
                 WARN("error reading from socket: %s\n", strerror(errno));
                 close(conn_fd);
                 exit(EXIT_FAILURE);
             };
 
-            if (http_req(buffer, conn_fd, directory) == -1) {
+            if (http_process_req(buffer, conn_fd, directory) == -1) {
                 close(conn_fd);
                 exit(EXIT_FAILURE);
             }

@@ -48,7 +48,7 @@ static char* fix_path(char* path, char* dir) {
     return new_path;
 }
 
-// write file to socket for http response
+// write file to socket
 static void write_file(int fd, FILE* file) {
     char    chunk[CHUNK_SIZE];
     ssize_t nbytes = 0;
@@ -149,8 +149,7 @@ enum HttpVersion {
     HTTP_11 = 1,
 };
 
-int http_req(char* data, int sockfd, char* dir) {
-    write(2, data, strlen(data));
+int http_process_req(char* data, int sockfd, char* dir) {
     enum HttpMethod  method;
     enum HttpVersion version;
 

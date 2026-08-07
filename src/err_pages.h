@@ -1,7 +1,7 @@
 // clang-format off
 
 static char error_400_page[] =
-    "<!DOCTYPE html>\n \
+    "<!DOCTYPE html> \
     <html> \
         <head> \
             <style> \
