@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/ioctl.h>
 
 static const struct option long_options[] = {{"dir", required_argument, NULL, 'd'},
                                              {"help", no_argument, NULL, 'h'},
@@ -87,17 +88,17 @@ int main(int argc, char* argv[]) {
         if (cpid == 0) { // child runs this block
             close(tcp_fd);
 
-            // for now
-            char buffer[1024] = {};
+            int len = 0;
+            ioctl(conn_fd, FIONREAD, &len);
+            char buffer[len];
 
-            if (read(conn_fd, buffer, sizeof(buffer)) == -1) {
+            if (len > 0 && read(conn_fd, buffer, len) == -1) {
                 WARN("error reading from socket: %s\n", strerror(errno));
                 close(conn_fd);
                 exit(EXIT_FAILURE);
             };
 
             if (http_req(buffer, conn_fd, directory) == -1) {
-                WARN("invalid http request\n");
                 close(conn_fd);
                 exit(EXIT_FAILURE);
             }

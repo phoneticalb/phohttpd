@@ -1,7 +1,9 @@
 #include "err_pages.h"
 #include "macros.h"
+#include <time.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -59,36 +61,72 @@ static void write_file(int fd, FILE* file) {
     return;
 }
 
+static long get_file_size(FILE* file) {
+    long size;
+    fseek(file, 0, SEEK_END);
+    size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    return size;
+}
+
 static void http_resp(int status, int sockfd, FILE* file) {
-    char*   response_str;
-    ssize_t len;
+    char*   status_line = NULL;
+    char    default_headers[] = "\r\nServer: phohttpd\r\nConnection: close\r\n\r\n\n";
+    char    time_str[256];
+    char    cl_str[256];
+    ssize_t resp_len;
+    long    file_size;
+
+    if (file != NULL) {
+        file_size = get_file_size(file);
+        snprintf(cl_str, sizeof(cl_str), "\r\nContent-Length: %ld", file_size);
+    }
+
+    time_t t = time(NULL);
+    struct tm* time_tmp = localtime(&t);
+
+    if (time_tmp == NULL) {
+        WARN("error in localtime: %s\n", strerror(errno));
+        snprintf(time_str, sizeof(time_str), "\r\nDate: unknown");
+    } else
+        strftime(time_str, sizeof(time_str), "\r\nDate: %a, %d %b %Y %T %Z", time_tmp);
+
+    ssize_t headers_len = strlen(default_headers) + sizeof(time_str) + sizeof(cl_str);
+    char headers[headers_len];
+
+    snprintf(headers, headers_len, "%s%s%s", time_str, cl_str, default_headers);
+
     switch (status) {
     case 200:
-        response_str = "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n";
+        status_line = "HTTP/1.1 200 OK";
         break;
     case 400:
-        response_str = "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n";
+        status_line = "HTTP/1.1 400 Bad Request";
         break;
     case 403:
-        response_str = "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n";
+        status_line = "HTTP/1.1 403 Forbidden";
         break;
     case 404:
-        response_str = "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n";
+        status_line = "HTTP/1.1 404 Not Found";
         break;
     case 500:
-        response_str = "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n";
+        status_line = "HTTP/1.1 500 Internal Server Error";
         break;
     case 505:
-        response_str = "HTTP/1.1 505 HTTP Version Not Supported\r\nConnection: close\r\n\r\n";
+        status_line = "HTTP/1.1 505 HTTP Version Not Supported";
         break;
     default:
         WARN("unimplemented status code: %d\n", status);
         break;
     }
-    if (response_str != NULL) {
-        len = strlen(response_str);
-        write(sockfd, response_str, len);
+
+    if (status_line != NULL) {
+        resp_len = strlen(status_line) + strlen(headers);
+        char response_str[resp_len];
+        snprintf(response_str, resp_len, "%s%s", status_line, headers);
+        write(sockfd, response_str, resp_len - 1);
     }
+
     if (file != NULL)
         write_file(sockfd, file);
 }
@@ -112,6 +150,7 @@ enum HttpVersion {
 };
 
 int http_req(char* data, int sockfd, char* dir) {
+    write(2, data, strlen(data));
     enum HttpMethod  method;
     enum HttpVersion version;
 
