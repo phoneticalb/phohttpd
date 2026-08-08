@@ -1,11 +1,11 @@
 #include "err_pages.h"
 #include "macros.h"
-#include <time.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #define CHUNK_SIZE 512
@@ -24,9 +24,10 @@ static char* str_remove(char* str, const char* sub) {
     return str;
 }
 
-static char* fix_path(char* path, char* dir) {
+static char* fix_path(char* path, const char* dir) {
     static char new_path[256];
 
+    // remove ..
     char* nodots = str_remove(path, "/..");
 
     if (dir != NULL) {
@@ -34,16 +35,39 @@ static char* fix_path(char* path, char* dir) {
     } else
         snprintf(new_path, sizeof(new_path), ".%s", nodots);
 
-    // for now
+    // remove ? queries for now
     char* qmark;
     qmark = strchr(new_path, '?');
     if (qmark != NULL) {
         *qmark = '\0';
     }
 
+    // remove trailing slashes
     char* slash = &new_path[strlen(new_path) - 1];
-    if (slash && *slash == "/"[0])
+    if (slash && *slash == '/')
         *slash = '\0';
+
+    // parse ascii url encodings
+    char* percent;
+    while ((percent = strchr(new_path, '%')) != NULL) {
+        int ascii_hex;
+        sscanf(percent, "%%%x", &ascii_hex);
+        if (ascii_hex < 32 || ascii_hex > 126)
+            break;
+
+        char dec = (char)ascii_hex;
+        for (int i = 0; i < 3; i++)
+            percent[i] = '\0';
+
+        ssize_t nbytes = 0;
+        for (int i = 3; percent[i] != '\0'; i++)
+            nbytes++;
+
+        memcpy(percent + 1, percent + 3, nbytes);
+        memset(percent + nbytes + 1, 0, 8);
+
+        percent[0] = dec;
+    }
 
     return new_path;
 }
@@ -69,7 +93,7 @@ static long get_file_size(FILE* file) {
     return size;
 }
 
-static void http_resp(int status, int sockfd, FILE* file) {
+static void http_resp(const int status, const int sockfd, FILE* file) {
     char*   status_line = NULL;
     char    default_headers[] = "\r\nServer: phohttpd\r\nConnection: close\r\n\r\n\n";
     char    time_str[256];
@@ -82,7 +106,7 @@ static void http_resp(int status, int sockfd, FILE* file) {
         snprintf(cl_str, sizeof(cl_str), "\r\nContent-Length: %ld", file_size);
     }
 
-    time_t t = time(NULL);
+    time_t     t = time(NULL);
     struct tm* time_tmp = localtime(&t);
 
     if (time_tmp == NULL) {
@@ -92,7 +116,7 @@ static void http_resp(int status, int sockfd, FILE* file) {
         strftime(time_str, sizeof(time_str), "\r\nDate: %a, %d %b %Y %T %Z", time_tmp);
 
     ssize_t headers_len = strlen(default_headers) + sizeof(time_str) + sizeof(cl_str);
-    char headers[headers_len];
+    char    headers[headers_len];
 
     snprintf(headers, headers_len, "%s%s%s", time_str, cl_str, default_headers);
 
@@ -149,7 +173,7 @@ enum HttpVersion {
     HTTP_11 = 1,
 };
 
-int http_process_req(char* data, int sockfd, char* dir) {
+int http_process_req(char* data, const int sockfd, const char* dir) {
     enum HttpMethod  method;
     enum HttpVersion version;
 

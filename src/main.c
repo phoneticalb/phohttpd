@@ -8,11 +8,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <unistd.h>
 #include <sys/wait.h>
-#include <sys/ioctl.h>
+#include <unistd.h>
 
 static const struct option long_options[] = {{"dir", required_argument, NULL, 'd'},
                                              {"help", no_argument, NULL, 'h'},
@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
         INFO("serving current directory\n");
     }
 
-    int tcp_fd = create_tcp_socket(port, bind_addr);
+    const int tcp_fd = create_tcp_socket(port, bind_addr);
     if (tcp_fd == -1)
         return 1;
 
@@ -80,8 +80,8 @@ int main(int argc, char* argv[]) {
     INFO("listening on %s:%d\n", bind_addr, port);
 
     while (1) {
-        int conn_fd = accept(tcp_fd, (struct sockaddr*)&client_addr, &client_addr_len);
-        int wstatus;
+        int   conn_fd = accept(tcp_fd, (struct sockaddr*)&client_addr, &client_addr_len);
+        int   wstatus;
         pid_t cpid, w;
 
         cpid = fork();
@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
             close(tcp_fd);
 
             const int req_limit = 4096;
-            char buffer[req_limit];
+            char      buffer[req_limit];
 
             if (read(conn_fd, buffer, req_limit) == -1) {
                 WARN("error reading from socket: %s\n", strerror(errno));
@@ -112,9 +112,8 @@ int main(int argc, char* argv[]) {
                     exit(EXIT_FAILURE);
                 }
                 if (WIFSIGNALED(wstatus)) {
-                    int signal = WTERMSIG(wstatus);
+                    const int signal = WTERMSIG(wstatus);
                     ERR("child was killed: %s\n", strsignal(signal));
-                    exit(EXIT_FAILURE);
                 }
             } while (!WIFEXITED(wstatus) && !WIFSIGNALED(wstatus));
         }
