@@ -2,6 +2,7 @@
 #include "macros.h"
 #include "server.h"
 #include <errno.h>
+#include <fcntl.h>
 #include <getopt.h>
 #include <netinet/in.h>
 #include <signal.h>
@@ -13,6 +14,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <arpa/inet.h>
+#include <poll.h>
 
 static const struct option long_options[] = {{"dir", required_argument, NULL, 'd'},
                                              {"help", no_argument, NULL, 'h'},
@@ -26,11 +29,76 @@ static const char usage[] = "Usage: phohttpd [options]\n"
                             "  -v, --version           Print version number\n"
                             "\n";
 
+static char* format_request(struct HttpRequest req) {
+    char* method;
+    char* version;
+    char* status;
+
+    switch (req.method) {
+    case GET:
+        method = "GET";
+        break;
+    case HEAD:
+        method = "HEAD";
+        break;
+    default:
+        method = "???";
+        break;
+    }
+
+    switch (req.version) {
+    case HTTP_INVALID:
+        version = "invalid";
+        break;
+    case HTTP_10:
+        version = "HTTP/1.0";
+        break;
+    case HTTP_11:
+        version = "HTTP/1.1";
+        break;
+    default:
+        version = "???";
+        break;
+    }
+
+    switch (req.status) {
+    case HTTP_OK:
+        status = "200 OK";
+        break;
+    case HTTP_BAD_REQUEST:
+        status = "400 Bad Request";
+        break;
+    case HTTP_FORBIDDEN:
+        status = "403 Forbidden";
+        break;
+    case HTTP_NOT_FOUND:
+        status = "404 Not Found";
+        break;
+    case HTTP_INTERNAL_SERVER_ERROR:
+        status = "500 Internal Server Error";
+        break;
+    case HTTP_VERSION_NOT_SUPPORTED:
+        status = "505 HTTP Version Not Supported";
+        break;
+    default:
+        status = "??? Unknown";
+        break;
+    }
+
+    ssize_t len = strlen(method) + strlen(req.path) + strlen(version) + strlen(status) + 4;
+
+    char* req_str = malloc(len);
+
+    snprintf(req_str, len, "%s %s %s %s", method, req.path, version, status);
+
+    return req_str;
+}
+
 int main(int argc, char* argv[]) {
     INFO(ANSI_BOLD "phohttpd " ANSI_RESET "%s\n", VERSION);
     struct sockaddr_in client_addr;
     const int          port = 8080;
-    const char*        bind_addr = "127.0.0.1";
+    const char*        bind_addr = "0.0.0.0";
     socklen_t          client_addr_len = sizeof(client_addr);
 
     int   c;
@@ -80,6 +148,7 @@ int main(int argc, char* argv[]) {
     INFO("listening on %s:%d\n", bind_addr, port);
 
     while (1) {
+        // struct pollfd pfds[1];
         int   conn_fd = accept(tcp_fd, (struct sockaddr*)&client_addr, &client_addr_len);
         int   wstatus;
         pid_t cpid, w;
@@ -97,10 +166,12 @@ int main(int argc, char* argv[]) {
                 exit(EXIT_FAILURE);
             };
 
-            if (http_process_req(buffer, conn_fd, directory) == -1) {
-                close(conn_fd);
-                exit(EXIT_FAILURE);
-            }
+            struct HttpRequest req = http_process_req(buffer, conn_fd, directory);
+
+            char client_ip[16];
+            inet_ntop(AF_INET, &client_addr.sin_addr.s_addr, client_ip, 16);
+
+            INFO("request from %s:%d | %s\n", client_ip, client_addr.sin_port, format_request(req));
 
             close(conn_fd);
             exit(EXIT_SUCCESS);
@@ -117,7 +188,6 @@ int main(int argc, char* argv[]) {
                 }
             } while (!WIFEXITED(wstatus) && !WIFSIGNALED(wstatus));
         }
-
         close(conn_fd);
     }
 

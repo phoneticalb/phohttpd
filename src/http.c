@@ -1,5 +1,6 @@
 #include "err_pages.h"
 #include "macros.h"
+#include "http.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -31,7 +32,7 @@ static char* fix_path(char* path, const char* dir) {
     char* nodots = str_remove(path, "/..");
 
     if (dir != NULL) {
-        snprintf(new_path, sizeof(new_path), "./%s%s", dir, nodots);
+        snprintf(new_path, sizeof(new_path), "%s%s", dir, nodots);
     } else
         snprintf(new_path, sizeof(new_path), ".%s", nodots);
 
@@ -93,7 +94,7 @@ static long get_file_size(FILE* file) {
     return size;
 }
 
-static void http_resp(const int status, const int sockfd, FILE* file) {
+static void http_send_resp(struct HttpRequest req, const int sockfd, FILE* file) {
     char*   status_line = NULL;
     char    default_headers[] = "\r\nServer: phohttpd\r\nConnection: close\r\n\r\n\n";
     char    time_str[256];
@@ -120,27 +121,27 @@ static void http_resp(const int status, const int sockfd, FILE* file) {
 
     snprintf(headers, headers_len, "%s%s%s", time_str, cl_str, default_headers);
 
-    switch (status) {
-    case 200:
+    switch (req.status) {
+    case HTTP_OK:
         status_line = "HTTP/1.1 200 OK";
         break;
-    case 400:
+    case HTTP_BAD_REQUEST:
         status_line = "HTTP/1.1 400 Bad Request";
         break;
-    case 403:
+    case HTTP_FORBIDDEN:
         status_line = "HTTP/1.1 403 Forbidden";
         break;
-    case 404:
+    case HTTP_NOT_FOUND:
         status_line = "HTTP/1.1 404 Not Found";
         break;
-    case 500:
+    case HTTP_INTERNAL_SERVER_ERROR:
         status_line = "HTTP/1.1 500 Internal Server Error";
         break;
-    case 505:
+    case HTTP_VERSION_NOT_SUPPORTED:
         status_line = "HTTP/1.1 505 HTTP Version Not Supported";
         break;
     default:
-        WARN("unimplemented status code: %d\n", status);
+        WARN("unimplemented status code: %d\n", req.status);
         break;
     }
 
@@ -162,23 +163,10 @@ int is_dir(const char* path) {
     return S_ISDIR(statbuf.st_mode);
 }
 
-enum HttpMethod {
-    GET = 0,
-    HEAD = 1,
-};
-
-enum HttpVersion {
-    HTTP_INVALID = -1,
-    HTTP_10 = 0,
-    HTTP_11 = 1,
-};
-
-int http_process_req(char* data, const int sockfd, const char* dir) {
-    enum HttpMethod  method;
-    enum HttpVersion version;
+struct HttpRequest http_process_req(char* data, const int sockfd, const char* dir) {
+    struct HttpRequest req;
 
     char method_str[8];
-    char path[256];
     char version_str[16];
 
     char* token;
@@ -188,77 +176,84 @@ int http_process_req(char* data, const int sockfd, const char* dir) {
         strncpy(method_str, token, sizeof(method_str));
 
     if ((token = strtok_r(NULL, " ", &save)) != NULL)
-        strncpy(path, token, sizeof(path));
+        strncpy(req.path, token, sizeof(req.path));
 
     if ((token = strtok_r(NULL, " \r\n", &save)) != NULL)
         strncpy(version_str, token, sizeof(version_str));
 
-    if (method_str[0] == '\0' || path[0] == '\0' || version_str[0] == '\0') {
-        http_resp(400, sockfd, NULL);
+    if (method_str[0] == '\0' || req.path[0] == '\0' || version_str[0] == '\0') {
+        req.status = HTTP_BAD_REQUEST;
+        http_send_resp(req, sockfd, NULL);
         write(sockfd, error_400_page, strlen(error_400_page));
-        return -1;
+        return req;
     }
 
     if (!strncmp(version_str, "HTTP/1.0", 9))
-        version = HTTP_10;
+        req.version = HTTP_10;
     else if (!strncmp(version_str, "HTTP/1.1", 9))
-        version = HTTP_11;
+        req.version = HTTP_11;
     else
-        version = HTTP_INVALID;
+        req.version = HTTP_INVALID;
 
-    if (version == HTTP_INVALID) {
-        http_resp(505, sockfd, NULL);
+    if (req.version == HTTP_INVALID) {
+        req.status = HTTP_VERSION_NOT_SUPPORTED;
+        http_send_resp(req, sockfd, NULL);
         write(sockfd, error_505_page, strlen(error_505_page));
-        return -1;
+        return req;
     }
 
     if (!strncmp(method_str, "GET", 4))
-        method = GET;
+        req.method = GET;
     else if (!strncmp(method_str, "HEAD", 5))
-        method = HEAD;
+        req.method = HEAD;
     else {
-        http_resp(400, sockfd, NULL);
+        req.status = HTTP_BAD_REQUEST;
+        http_send_resp(req, sockfd, NULL);
         write(sockfd, error_400_page, strlen(error_400_page));
-        return -1;
+        return req;
     }
 
-    if (method == HEAD) {
-        http_resp(200, sockfd, NULL);
-        return 0;
+    if (req.method == HEAD) {
+        req.status = HTTP_OK;
+        http_send_resp(req, sockfd, NULL);
+        return req;
     }
 
-    char  req_path[256];
-    char* tmp_path = fix_path(path, dir);
+    char  file_path[256];
+    char* tmp_path = fix_path(req.path, dir);
 
     if (is_dir(tmp_path))
-        snprintf(req_path, strlen(tmp_path) + 12, "%s/index.html", tmp_path);
+        snprintf(file_path, strlen(tmp_path) + 12, "%s/index.html", tmp_path);
     else
-        snprintf(req_path, strlen(tmp_path) + 1, "%s", tmp_path);
+        snprintf(file_path, strlen(tmp_path) + 1, "%s", tmp_path);
 
-    DEBUG("requested path: %s\n", req_path);
-
-    FILE* req_file = fopen(req_path, "r");
-    if (req_file == NULL) {
+    FILE* file = fopen(file_path, "r");
+    if (file == NULL) {
         switch (errno) {
         case ENOENT:
-            http_resp(404, sockfd, NULL);
+            req.status = HTTP_NOT_FOUND;
+            http_send_resp(req, sockfd, NULL);
             write(sockfd, error_404_page, strlen(error_404_page));
-            return -1;
+            return req;
         case EACCES:
-            http_resp(403, sockfd, NULL);
+            req.status = HTTP_FORBIDDEN;
+            http_send_resp(req, sockfd, NULL);
             write(sockfd, error_403_page, strlen(error_403_page));
-            return -1;
+            return req;
         default:
-            http_resp(500, sockfd, NULL);
+            req.status = HTTP_INTERNAL_SERVER_ERROR;
+            http_send_resp(req, sockfd, NULL);
             write(sockfd, error_500_page, strlen(error_500_page));
-            return -1;
+            return req;
         }
     }
 
-    if (method == GET)
-        http_resp(200, sockfd, req_file);
+    if (req.method == GET) {
+        req.status = HTTP_OK;
+        http_send_resp(req, sockfd, file);
+    }
 
-    fclose(req_file);
+    fclose(file);
 
-    return 0;
+    return req;
 }

@@ -1,6 +1,7 @@
 #include "macros.h"
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -17,6 +18,11 @@ int create_tcp_socket(const int port, const char* bind_addr) {
 
     int on = 1;
     setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+
+    // if (fcntl(socket_fd, F_SETFL, fcntl(socket_fd, F_GETFL, 0) | O_NONBLOCK) == -1) {
+    //     ERR("error in fcntl: %s\n", strerror(errno));
+    //     return -1;
+    // }
 
     if (bind(socket_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
         ERR("error in bind: %s\n", strerror(errno));
