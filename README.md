@@ -11,6 +11,10 @@ By default, it serves all files from the current working directory. The director
 
 ### Usage
 
-Compile with `make`.
-
-And run with `./build/phohttpd`.
+1. Clone the repo:
+```sh
+git clone https://github.com/phoneticalb/phohttpd
+cd phohttpd
+```
+2. Compile with `make`
+3. Run with `./phohttpd`
