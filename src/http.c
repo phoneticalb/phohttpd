@@ -9,7 +9,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define CHUNK_SIZE 512
+#define CHUNK_SIZE 4096
 
 // https://stackoverflow.com/a/47117431
 static char* str_remove(char* str, const char* sub) {
@@ -96,7 +96,7 @@ static long get_file_size(FILE* file) {
 
 static void http_send_resp(struct HttpRequest req, const int sockfd, FILE* file) {
     char*   status_line = NULL;
-    char    default_headers[] = "\r\nServer: phohttpd\r\nConnection: close\r\n\r\n\n";
+    char    default_headers[] = "\r\nConnection: close\r\n\r\n\n";
     char    time_str[256];
     char    cl_str[256];
     ssize_t resp_len;
