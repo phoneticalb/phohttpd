@@ -188,6 +188,17 @@ struct HttpRequest http_process_req(char* data, const int sockfd, const char* di
         return req;
     }
 
+    if (!strncmp(method_str, "GET", 4))
+        req.method = GET;
+    else if (!strncmp(method_str, "HEAD", 5))
+        req.method = HEAD;
+    else {
+        req.status = HTTP_BAD_REQUEST;
+        http_send_resp(req, sockfd, NULL);
+        write(sockfd, error_400_page, strlen(error_400_page));
+        return req;
+    }
+
     if (!strncmp(version_str, "HTTP/1.0", 9))
         req.version = HTTP_10;
     else if (!strncmp(version_str, "HTTP/1.1", 9))
@@ -199,17 +210,6 @@ struct HttpRequest http_process_req(char* data, const int sockfd, const char* di
         req.status = HTTP_VERSION_NOT_SUPPORTED;
         http_send_resp(req, sockfd, NULL);
         write(sockfd, error_505_page, strlen(error_505_page));
-        return req;
-    }
-
-    if (!strncmp(method_str, "GET", 4))
-        req.method = GET;
-    else if (!strncmp(method_str, "HEAD", 5))
-        req.method = HEAD;
-    else {
-        req.status = HTTP_BAD_REQUEST;
-        http_send_resp(req, sockfd, NULL);
-        write(sockfd, error_400_page, strlen(error_400_page));
         return req;
     }
 

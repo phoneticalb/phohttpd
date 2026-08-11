@@ -143,24 +143,25 @@ int main(int argc, char* argv[]) {
 
     listen(tcp_fd, 128);
 
-    signal(SIGPIPE, SIG_IGN);
+    struct sigaction act = { 0 };
+
+    act.sa_handler = SIG_IGN;
+
+    sigaction(SIGPIPE, &act, NULL);
+    sigaction(SIGCHLD, &act, NULL);
 
     INFO("listening on %s:%d\n", bind_addr, port);
 
     while (1) {
-        // struct pollfd pfds[1];
-        int   conn_fd = accept(tcp_fd, (struct sockaddr*)&client_addr, &client_addr_len);
-        int   wstatus;
-        pid_t cpid, w;
+        int conn_fd = accept(tcp_fd, (struct sockaddr*)&client_addr, &client_addr_len);
 
-        cpid = fork();
-        if (cpid == 0) { // child runs this block
+        if (!fork()) {
             close(tcp_fd);
 
             const int req_limit = 4096;
             char      buffer[req_limit];
 
-            if (read(conn_fd, buffer, req_limit) == -1) {
+            if (read(conn_fd, buffer, req_limit) == -1 && errno != EAGAIN) {
                 WARN("error reading from socket: %s\n", strerror(errno));
                 close(conn_fd);
                 exit(EXIT_FAILURE);
@@ -175,19 +176,8 @@ int main(int argc, char* argv[]) {
 
             close(conn_fd);
             exit(EXIT_SUCCESS);
-        } else { // parent runs this block
-            do {
-                w = waitpid(cpid, &wstatus, WUNTRACED | WCONTINUED);
-                if (w == -1) {
-                    ERR("error in waitpid: %s\n", strerror(errno));
-                    exit(EXIT_FAILURE);
-                }
-                if (WIFSIGNALED(wstatus)) {
-                    const int signal = WTERMSIG(wstatus);
-                    ERR("child was killed: %s\n", strsignal(signal));
-                }
-            } while (!WIFEXITED(wstatus) && !WIFSIGNALED(wstatus));
         }
+
         close(conn_fd);
     }
 
