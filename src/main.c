@@ -29,7 +29,7 @@ static const char usage[] = "Usage: phohttpd [options]\n"
                             "  -v, --version           Print version number\n"
                             "\n";
 
-static char* format_request(struct HttpRequest req) {
+static void format_request(struct HttpRequest req, char* dest) {
     char* method;
     char* version;
     char* status;
@@ -87,11 +87,7 @@ static char* format_request(struct HttpRequest req) {
 
     ssize_t len = strlen(method) + strlen(req.path) + strlen(version) + strlen(status) + 4;
 
-    char* req_str = malloc(len);
-
-    snprintf(req_str, len, "%s %s %s %s", method, req.path, version, status);
-
-    return req_str;
+    snprintf(dest, len, "%s %s %s %s", method, req.path, version, status);
 }
 
 int main(int argc, char* argv[]) {
@@ -147,7 +143,6 @@ int main(int argc, char* argv[]) {
 
     act.sa_handler = SIG_IGN;
 
-    sigaction(SIGPIPE, &act, NULL);
     sigaction(SIGCHLD, &act, NULL);
 
     INFO("listening on %s:%d\n", bind_addr, port);
@@ -172,7 +167,10 @@ int main(int argc, char* argv[]) {
             char client_ip[16];
             inet_ntop(AF_INET, &client_addr.sin_addr.s_addr, client_ip, 16);
 
-            INFO("request from %s:%d | %s\n", client_ip, client_addr.sin_port, format_request(req));
+            char req_str[256];
+            format_request(req, req_str);
+
+            INFO("request from %s:%d | %s\n", client_ip, client_addr.sin_port, req_str);
 
             close(conn_fd);
             exit(EXIT_SUCCESS);
