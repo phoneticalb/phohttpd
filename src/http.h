@@ -26,8 +26,8 @@ enum HttpStatus {
 };
 
 struct HttpRequest {
-    enum HttpMethod method;
+    enum HttpMethod  method;
     enum HttpVersion version;
-    enum HttpStatus status;
-    char path[256];
+    enum HttpStatus  status;
+    char             path[256];
 };

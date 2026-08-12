@@ -1,6 +1,6 @@
+#include "http.h"
 #include "err_pages.h"
 #include "macros.h"
-#include "http.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>

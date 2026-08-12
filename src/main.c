@@ -1,10 +1,12 @@
 #include "http.h"
 #include "macros.h"
 #include "server.h"
+#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -14,17 +16,17 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <poll.h>
 
-static const struct option long_options[] = {{"dir", required_argument, NULL, 'd'},
-                                             {"help", no_argument, NULL, 'h'},
-                                             {"version", no_argument, NULL, 'v'},
-                                             {0, 0, 0}};
+static const struct option long_options[] = {
+    {"dir", required_argument, NULL, 'd'},    {"port", required_argument, NULL, 'p'},
+    {"listen", required_argument, NULL, 'l'}, {"help", no_argument, NULL, 'h'},
+    {"version", no_argument, NULL, 'v'},      {0, 0, 0}};
 
 static const char usage[] = "Usage: phohttpd [options]\n"
                             "\n"
                             "  -d  --dir <path>        Directory to serve files from\n"
+                            "  -p  --port <port>       Port to listen on (default: 8080)\n"
+                            "  -l  --listen <addr>     Address to listen on (default: 0.0.0.0)\n"
                             "  -h, --help              Show this menu\n"
                             "  -v, --version           Print version number\n"
                             "\n";
@@ -93,32 +95,35 @@ static void format_request(struct HttpRequest req, char* dest) {
 int main(int argc, char* argv[]) {
     INFO(ANSI_BOLD "phohttpd " ANSI_RESET "%s\n", VERSION);
     struct sockaddr_in client_addr;
-    const int          port = 8080;
-    const char*        bind_addr = "0.0.0.0";
     socklen_t          client_addr_len = sizeof(client_addr);
 
-    int   c;
-    char* directory = NULL;
+    unsigned int port = 8080;
+    char*        bind_addr = "0.0.0.0";
+    char*        directory = NULL;
+    char         c;
     while (1) {
         int option_index = 0;
-        c = getopt_long(argc, argv, "d:hv", long_options, &option_index);
+        c = getopt_long(argc, argv, "d:p:l:hv", long_options, &option_index);
         if (c == -1)
             break;
         switch (c) {
         case 'd': // dir
             directory = optarg;
             break;
+        case 'p':
+            port = strtoul(optarg, NULL, 10);
+            break;
+        case 'l':
+            bind_addr = optarg;
+            break;
         case 'h': // help
             INFO("%s", usage);
-            exit(EXIT_SUCCESS);
-            break;
+            return 1;
         case 'v': // version
-            exit(EXIT_SUCCESS);
-            break;
+            return 1;
         default:
             INFO("%s", usage);
-            exit(EXIT_FAILURE);
-            break;
+            return 1;
         }
     }
 
@@ -139,7 +144,7 @@ int main(int argc, char* argv[]) {
 
     listen(tcp_fd, 128);
 
-    struct sigaction act = { 0 };
+    struct sigaction act = {0};
 
     act.sa_handler = SIG_IGN;
 
